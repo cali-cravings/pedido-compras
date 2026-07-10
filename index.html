@@ -228,10 +228,9 @@ textarea{resize:none;line-height:1.5}
     <div class="card">
       <label class="fl">Unidade</label>
       <select id="f-unidade">
-        <option>Masha</option>
-        <option>Pier</option>
+        <option>Cali Cravings</option>
         <option>Cali Café</option>
-        <option>Texas Country</option>
+        <option>Texas Country Bar</option>
       </select>
     </div>
     <div class="card">
@@ -428,7 +427,8 @@ function renderHome(){
     const st=stMap[r.status]||stMap.pending;
     const ico=r.status==='pending'?'⏳':r.status==='aprovado'?'🛒':'🚫';
     const cls=r.status==='pending'?'p':'s';
-    return '<div class="ri" data-key="'+r.fbKey+'"><div class="rico '+cls+'">'+ico+'</div><div class="rm"><div class="rt">'+r.unidade+' · '+r.setor+'</div><div class="rs">'+r.nome+' · '+fmtTs(r.ts)+' · '+r.items.length+' item'+(r.items.length>1?'s':'')+'</div></div><span class="badge '+st.cls+'">'+st.lb+'</span></div>';
+    const truck=r.emCaminho?' <span title="A caminho do fornecedor">🚚</span>':'';
+    return '<div class="ri" data-key="'+r.fbKey+'"><div class="rico '+cls+'">'+ico+'</div><div class="rm"><div class="rt">'+r.unidade+' · '+r.setor+'</div><div class="rs">'+r.nome+' · '+fmtTs(r.ts)+' · '+r.items.length+' item'+(r.items.length>1?'s':'')+'</div></div><span class="badge '+st.cls+'">'+st.lb+truck+'</span></div>';
   }).join('');
   list.querySelectorAll('.ri').forEach(el=>{
     el.addEventListener('click',()=>openDetail(el.dataset.key));
@@ -440,6 +440,10 @@ function row(k,v){return '<div class="dr"><span class="dk">'+k+'</span><span cla
 function openDetail(fbKey){
   currentDetail=allPeds.find(r=>r.fbKey===fbKey);
   if(!currentDetail) return;
+  renderDetailView();
+  goTo('s-detail');
+}
+function renderDetailView(){
   document.getElementById('d-setor').textContent=currentDetail.unidade+' · '+currentDetail.setor;
   document.getElementById('d-date').textContent=fmtTs(currentDetail.ts);
   const stLb={pending:'⏳ Pendente',aprovado:'✅ Aprovado',recusado:'❌ Recusado'};
@@ -464,10 +468,16 @@ function openDetail(fbKey){
       '<button class="modal-confirm" style="border-radius:14px" onclick="openAprovModal(\'aprovado\')"><i class="ti ti-check"></i> Aprovar</button>'+
       '<button class="modal-cancel" style="border-radius:14px;color:#a32d2d;border-color:#f0c9c8" onclick="openAprovModal(\'recusado\')"><i class="ti ti-x"></i> Recusar</button>'+
     '</div>';
+  } else if(currentDetail.status==='aprovado' && !currentDetail.emCaminho){
+    act.innerHTML='<button class="btn-wa" style="background:#2C3E35" onclick="marcarACaminho()">🚚 Marcar como enviado ao fornecedor</button>';
+  } else if(currentDetail.status==='aprovado' && currentDetail.emCaminho){
+    act.innerHTML='<div class="card">'+
+      row('Status entrega','🚚 A caminho do fornecedor')+
+      (currentDetail.tsEnvio?row('Marcado em',fmtTs(currentDetail.tsEnvio)):'')+
+    '</div><button class="btn-sec" onclick="desmarcarACaminho()" style="color:var(--tx3)">Desmarcar</button>';
   } else { act.innerHTML=''; }
   const be=document.getElementById('btn-edit');
   if(be) be.style.display=currentDetail.status==='pending'?'flex':'none';
-  goTo('s-detail');
 }
 
 // ---- APROVACAO ----
@@ -494,6 +504,24 @@ function confirmAprov(){
   openWAResultado(full);
   toast(aprovAction==='aprovado'?'Pedido aprovado ✅':'Pedido recusado ❌');
   goTo('s-home');
+}
+
+// ---- EM CAMINHO (ENVIADO AO FORNECEDOR) ----
+function marcarACaminho(){
+  if(!currentDetail) return;
+  const upd={emCaminho:true,tsEnvio:Date.now()};
+  PED_REF.child(currentDetail.fbKey).update(upd);
+  currentDetail={...currentDetail,...upd};
+  toast('Pedido marcado como a caminho 🚚');
+  renderDetailView();
+}
+function desmarcarACaminho(){
+  if(!currentDetail) return;
+  const upd={emCaminho:false,tsEnvio:null};
+  PED_REF.child(currentDetail.fbKey).update(upd);
+  currentDetail={...currentDetail,...upd};
+  toast('Desmarcado');
+  renderDetailView();
 }
 
 // ---- DELETE ----
@@ -525,7 +553,7 @@ function editReq(){
   itemCount=0;
   document.getElementById('items-list').innerHTML='';
   document.querySelector('#s-form .htxt h1').textContent='Editar pedido';
-  document.getElementById('f-unidade').value=currentDetail.unidade||'Masha';
+  document.getElementById('f-unidade').value=currentDetail.unidade||'Cali Cravings';
   document.getElementById('f-setor').value=currentDetail.setor||'Cozinha';
   document.getElementById('f-nome').value=currentDetail.nome||'';
   document.getElementById('f-obs').value=currentDetail.obs||'';
