@@ -278,6 +278,7 @@ textarea{resize:none;line-height:1.5}
       <div class="card" id="d-items"></div>
     </div>
     <div id="d-obs-aprov"></div>
+    <div id="d-data-prevista"></div>
     <div id="d-actions"></div>
     <button class="btn-excel" onclick="exportExcel()"><i class="ti ti-file-spreadsheet"></i> Exportar Excel</button>
     <button class="btn-edit" id="btn-edit" onclick="editReq()"><i class="ti ti-pencil"></i> Editar pedido</button>
@@ -428,7 +429,8 @@ function renderHome(){
     const ico=r.status==='pending'?'⏳':r.status==='aprovado'?'🛒':'🚫';
     const cls=r.status==='pending'?'p':'s';
     const truck=r.emCaminho?' <span title="A caminho do fornecedor">🚚</span>':'';
-    return '<div class="ri" data-key="'+r.fbKey+'"><div class="rico '+cls+'">'+ico+'</div><div class="rm"><div class="rt">'+r.unidade+' · '+r.setor+'</div><div class="rs">'+r.nome+' · '+fmtTs(r.ts)+' · '+r.items.length+' item'+(r.items.length>1?'s':'')+'</div></div><span class="badge '+st.cls+'">'+st.lb+truck+'</span></div>';
+    const prev=r.dataPrevista?' <span style="font-size:11px" title="Data prevista de entrega">📅 '+fmtDataPrevista(r.dataPrevista)+'</span>':'';
+    return '<div class="ri" data-key="'+r.fbKey+'"><div class="rico '+cls+'">'+ico+'</div><div class="rm"><div class="rt">'+r.unidade+' · '+r.setor+'</div><div class="rs">'+r.nome+' · '+fmtTs(r.ts)+' · '+r.items.length+' item'+(r.items.length>1?'s':'')+'</div></div><span class="badge '+st.cls+'">'+st.lb+truck+prev+'</span></div>';
   }).join('');
   list.querySelectorAll('.ri').forEach(el=>{
     el.addEventListener('click',()=>openDetail(el.dataset.key));
@@ -462,6 +464,17 @@ function renderDetailView(){
       (currentDetail.obsAprovacao?row('Observação',currentDetail.obsAprovacao):'')+
     '</div>';
   } else { obsBox.innerHTML=''; }
+  const dpBox=document.getElementById('d-data-prevista');
+  if(currentDetail.status==='aprovado'){
+    const val=currentDetail.dataPrevista||'';
+    const lbl=val?fmtDataPrevista(val):'';
+    dpBox.innerHTML='<div class="card">'+
+      '<label class="fl">📅 Data prevista de entrega</label>'+
+      '<input type="date" id="inp-data-prevista" value="'+val+'" style="width:100%;padding:12px 14px;border:1px solid var(--bd);border-radius:12px;font-size:15px;background:var(--bg2);color:var(--tx1);font-family:inherit">'+
+      (lbl?'<div style="margin-top:8px;font-size:13px;color:var(--tx3)">Atual: '+lbl+'</div>':'')+
+      '<button class="btn-sec" style="margin-top:10px" onclick="salvarDataPrevista()">Salvar data</button>'+
+    '</div>';
+  } else { dpBox.innerHTML=''; }
   const act=document.getElementById('d-actions');
   if(currentDetail.status==='pending'){
     act.innerHTML='<div class="btn-row">'+
@@ -507,6 +520,20 @@ function confirmAprov(){
 }
 
 // ---- EM CAMINHO (ENVIADO AO FORNECEDOR) ----
+function fmtDataPrevista(val){
+  const [y,m,d]=val.split('-');
+  return d+'/'+m+'/'+y;
+}
+function salvarDataPrevista(){
+  if(!currentDetail) return;
+  const val=document.getElementById('inp-data-prevista').value;
+  if(!val){ toast('Escolha uma data ⚠️'); return; }
+  const upd={dataPrevista:val};
+  PED_REF.child(currentDetail.fbKey).update(upd);
+  currentDetail={...currentDetail,...upd};
+  toast('Data prevista salva 📅');
+  renderDetailView();
+}
 function marcarACaminho(){
   if(!currentDetail) return;
   const upd={emCaminho:true,tsEnvio:Date.now()};
