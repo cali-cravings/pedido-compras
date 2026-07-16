@@ -453,7 +453,9 @@ function renderHome(){
     const cls=r.status==='pending'?'p':'s';
     const truck=r.emCaminho?' <span title="A caminho do fornecedor">🚚</span>':'';
     const prev=r.dataPrevista?' <span style="font-size:11px" title="Data prevista de entrega">📅 '+fmtDataPrevista(r.dataPrevista)+'</span>':'';
-    return '<div class="ri" data-key="'+r.fbKey+'"><div class="rico '+cls+'">'+ico+'</div><div class="rm"><div class="rt">'+r.unidade+' · '+r.setor+'</div><div class="rs">'+r.nome+' · '+fmtTs(r.ts)+' · '+r.items.length+' item'+(r.items.length>1?'s':'')+'</div></div><span class="badge '+st.cls+'">'+st.lb+truck+prev+'</span></div>';
+    const compradosN=r.status==='aprovado'?r.items.filter(it=>it.comprado).length:0;
+    const compras=r.status==='aprovado'?' <span style="font-size:11px" title="Itens comprados">🛍️ '+compradosN+'/'+r.items.length+'</span>':'';
+    return '<div class="ri" data-key="'+r.fbKey+'"><div class="rico '+cls+'">'+ico+'</div><div class="rm"><div class="rt">'+r.unidade+' · '+r.setor+'</div><div class="rs">'+r.nome+' · '+fmtTs(r.ts)+' · '+r.items.length+' item'+(r.items.length>1?'s':'')+'</div></div><span class="badge '+st.cls+'">'+st.lb+truck+prev+compras+'</span></div>';
   }).join('');
   list.querySelectorAll('.ri').forEach(el=>{
     el.addEventListener('click',()=>openDetail(el.dataset.key));
@@ -472,12 +474,20 @@ function renderDetailView(){
   document.getElementById('d-setor').textContent=currentDetail.unidade+' · '+currentDetail.setor;
   document.getElementById('d-date').textContent=fmtTs(currentDetail.ts);
   const stLb={pending:'⏳ Pendente',aprovado:'✅ Aprovado',recusado:'❌ Recusado'};
+  const canCheck = currentDetail.status==='aprovado';
+  const compradosCount = currentDetail.items.filter(it=>it.comprado).length;
   document.getElementById('d-info').innerHTML=
     row('Solicitante',currentDetail.nome)+
     row('Status',stLb[currentDetail.status]||'—')+
+    (canCheck?row('Comprados',compradosCount+' de '+currentDetail.items.length):'')+
     (currentDetail.obs?'<div class="dr"><span class="dk">Obs</span><span class="dv" style="font-weight:400;color:var(--tx2)">'+currentDetail.obs+'</span></div>':'');
-  document.getElementById('d-items').innerHTML=currentDetail.items.map(it=>{
-    return '<div class="item-falta"><span class="item-falta-key">'+it.n+(it.obs?' <span style="color:var(--tx3)">('+it.obs+')</span>':'')+'</span><span class="item-falta-val"><span class="item-falta-qty">'+it.q+' '+it.u+'</span></span></div>';
+  document.getElementById('d-items').innerHTML=currentDetail.items.map((it,idx)=>{
+    const checked = !!it.comprado;
+    const checkBtn = canCheck
+      ? '<button type="button" onclick="toggleComprado('+idx+')" title="'+(checked?'Comprado — toque para desmarcar':'Marcar como comprado')+'" style="border:none;background:none;cursor:pointer;font-size:17px;padding:0 8px 0 0;vertical-align:middle;line-height:1">'+(checked?'✅':'⬜')+'</button>'
+      : (checked ? '<span style="padding:0 8px 0 0">✅</span>' : '');
+    const nameStyle = checked ? 'text-decoration:line-through;color:var(--tx3)' : '';
+    return '<div class="item-falta"><span class="item-falta-key">'+checkBtn+'<span style="'+nameStyle+'">'+it.n+(it.obs?' <span style="color:var(--tx3)">('+it.obs+')</span>':'')+'</span></span><span class="item-falta-val"><span class="item-falta-qty">'+it.q+' '+it.u+'</span></span></div>';
   }).join('');
   const obsBox=document.getElementById('d-obs-aprov');
   if(currentDetail.status!=='pending' && (currentDetail.aprovadoPor||currentDetail.obsAprovacao)){
@@ -570,6 +580,19 @@ function salvarDataPrevista(){
     PED_REF.child(currentDetail.fbKey).update(upd);
     currentDetail={...currentDetail,...upd};
     toast('Data prevista salva 📅');
+    renderDetailView();
+  });
+}
+function toggleComprado(idx){
+  if(!currentDetail) return;
+  const item = currentDetail.items[idx];
+  if(!item) return;
+  const newVal = !item.comprado;
+  askSenha(newVal ? 'Marcar item como comprado' : 'Desmarcar item comprado', ()=>{
+    const items = currentDetail.items.map((it,i)=> i===idx ? {...it, comprado:newVal} : it);
+    PED_REF.child(currentDetail.fbKey).update({items});
+    currentDetail = {...currentDetail, items};
+    toast(newVal ? 'Item marcado como comprado ✅' : 'Item desmarcado');
     renderDetailView();
   });
 }
