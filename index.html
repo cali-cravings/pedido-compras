@@ -219,6 +219,7 @@ textarea{resize:none;line-height:1.5}
       <button class="btn-sec" onclick="setFilter('all')"><i class="ti ti-list"></i> Todos</button>
     </div>
     <button class="btn-excel-home" onclick="exportConsolidado()"><i class="ti ti-file-spreadsheet"></i> Exportar consolidado do dia</button>
+    <button class="btn-excel-home" onclick="exportPendentesPorSetor()"><i class="ti ti-file-spreadsheet"></i> Exportar itens pendentes por setor</button>
     <div>
       <div class="sec-l" id="list-title">Pedidos</div>
       <div id="req-list" style="display:flex;flex-direction:column;gap:10px"></div>
@@ -285,6 +286,7 @@ textarea{resize:none;line-height:1.5}
     <div>
       <div class="sec-l">Itens solicitados</div>
       <div class="card" id="d-items"></div>
+      <div id="d-marcar-todos"></div>
     </div>
     <div id="d-obs-aprov"></div>
     <div id="d-data-prevista"></div>
@@ -348,6 +350,7 @@ textarea{resize:none;line-height:1.5}
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <script>
 
@@ -489,6 +492,10 @@ function renderDetailView(){
     const nameStyle = checked ? 'text-decoration:line-through;color:var(--tx3)' : '';
     return '<div class="item-falta"><span class="item-falta-key">'+checkBtn+'<span style="'+nameStyle+'">'+it.n+(it.obs?' <span style="color:var(--tx3)">('+it.obs+')</span>':'')+'</span></span><span class="item-falta-val"><span class="item-falta-qty">'+it.q+' '+it.u+'</span></span></div>';
   }).join('');
+  const mtBox=document.getElementById('d-marcar-todos');
+  if(canCheck && compradosCount < currentDetail.items.length){
+    mtBox.innerHTML='<button class="btn-sec" style="margin-top:10px" onclick="marcarTodosComprados()">✅ Marcar todos como comprados</button>';
+  } else { mtBox.innerHTML=''; }
   const obsBox=document.getElementById('d-obs-aprov');
   if(currentDetail.status!=='pending' && (currentDetail.aprovadoPor||currentDetail.obsAprovacao)){
     obsBox.innerHTML='<div class="card">'+
@@ -593,6 +600,18 @@ function toggleComprado(idx){
     PED_REF.child(currentDetail.fbKey).update({items});
     currentDetail = {...currentDetail, items};
     toast(newVal ? 'Item marcado como comprado ✅' : 'Item desmarcado');
+    renderDetailView();
+  });
+}
+function marcarTodosComprados(){
+  if(!currentDetail) return;
+  const pendentes = currentDetail.items.filter(it=>!it.comprado).length;
+  if(pendentes===0){ toast('Todos os itens já estão marcados ✅'); return; }
+  askSenha('Marcar todos os itens como comprados', ()=>{
+    const items = currentDetail.items.map(it=>({...it, comprado:true}));
+    PED_REF.child(currentDetail.fbKey).update({items});
+    currentDetail = {...currentDetail, items};
+    toast('Todos os itens marcados como comprados ✅');
     renderDetailView();
   });
 }
@@ -890,6 +909,73 @@ function exportConsolidado(){
   document.body.appendChild(a);a.click();document.body.removeChild(a);
   URL.revokeObjectURL(url);
   toast('Consolidado exportado 📊');
+}
+
+function fmtDataCurta(ts){
+  const d=new Date(ts);
+  return pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear();
+}
+function exportPendentesPorSetor(){
+  askSenha('Exportar itens pendentes por setor', exportPendentesPorSetorExec);
+}
+function exportPendentesPorSetorExec(){
+  const aprovados = allPeds.filter(r=>r.status==='aprovado');
+  let rows = [];
+  aprovados.forEach(p=>{
+    p.items.forEach(it=>{
+      if(!it.comprado){
+        rows.push({
+          data: fmtDataCurta(p.ts),
+          setor: p.setor+' ('+p.unidade+')',
+          produto: it.n,
+          qtd: it.q,
+          un: it.u
+        });
+      }
+    });
+  });
+  if(!rows.length){ toast('Nenhum item pendente de compra 🎉'); return; }
+  rows.sort((a,b)=> a.setor.localeCompare(b.setor) || a.produto.localeCompare(b.produto));
+
+  const aoa=[['DATA PEDIDO ORIGEM','SETOR','','','PRODUTOS','','','','QTD TOTAL PARA COMPRA','','UNIDADE DE MEDIDA','']];
+  rows.forEach(r=>{ aoa.push([r.data, r.setor, '', '', r.produto, '', '', '', r.qtd, '', r.un, '']); });
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!merges'] = [
+    {s:{r:0,c:1}, e:{r:0,c:3}},
+    {s:{r:0,c:4}, e:{r:0,c:7}},
+    {s:{r:0,c:8}, e:{r:0,c:9}},
+    {s:{r:0,c:10}, e:{r:0,c:11}}
+  ];
+  ws['!cols'] = [{wch:16},{wch:9},{wch:9},{wch:9},{wch:15},{wch:15},{wch:15},{wch:15},{wch:9},{wch:9},{wch:9},{wch:9}];
+  const headStyle = { font:{bold:true}, alignment:{horizontal:'center',vertical:'center',wrapText:true},
+    border:{top:{style:'thin'},bottom:{style:'thin'},left:{style:'thin'},right:{style:'thin'}} };
+  ['A1','B1','E1','I1','K1'].forEach(addr=>{ if(ws[addr]) ws[addr].s = headStyle; });
+  ws['!autofilter'] = { ref: 'A1:M'+(rows.length+1) };
+
+  // ---- Aba 2: soma total por produto (agrupando produto + unidade) ----
+  const somaMap = {};
+  rows.forEach(r=>{
+    const key = r.produto+'|'+r.un;
+    if(!somaMap[key]) somaMap[key] = { produto: r.produto, un: r.un, qtd: 0 };
+    somaMap[key].qtd += (parseFloat(String(r.qtd).replace(',','.')) || 0);
+  });
+  const somaRows = Object.values(somaMap).sort((a,b)=> a.produto.localeCompare(b.produto));
+  const aoa2 = [['PRODUTO','QTD TOTAL','UNIDADE DE MEDIDA']];
+  somaRows.forEach(s=>{
+    const qtdFmt = Number.isInteger(s.qtd) ? s.qtd : Math.round(s.qtd*100)/100;
+    aoa2.push([s.produto, qtdFmt, s.un]);
+  });
+  const ws2 = XLSX.utils.aoa_to_sheet(aoa2);
+  ws2['!cols'] = [{wch:28},{wch:12},{wch:16}];
+  ['A1','B1','C1'].forEach(addr=>{ if(ws2[addr]) ws2[addr].s = headStyle; });
+  ws2['!autofilter'] = { ref: 'A1:C'+(somaRows.length+1) };
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Pendentes');
+  XLSX.utils.book_append_sheet(wb, ws2, 'Total por Produto');
+  XLSX.writeFile(wb, 'itens_pendentes_por_setor_'+pad(new Date().getDate())+pad(new Date().getMonth()+1)+'.xlsx');
+  toast('Relatório exportado 📊');
 }
 
 // ---- INIT ----
