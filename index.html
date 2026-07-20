@@ -452,11 +452,13 @@ function renderHome(){
   const stMap={pending:{cls:'bp',lb:'⏳ Pendente'},aprovado:{cls:'bs',lb:'✅ Aprovado'},recusado:{cls:'ba',lb:'❌ Recusado'}};
   list.innerHTML=shown.map(r=>{
     const st=stMap[r.status]||stMap.pending;
-    const ico=r.status==='pending'?'⏳':r.status==='aprovado'?'🛒':'🚫';
-    const cls=r.status==='pending'?'p':'s';
+    const compradosN=r.status==='aprovado'?r.items.filter(it=>it.comprado).length:0;
+    const tudoComprado = r.status==='aprovado' && r.items.length>0 && compradosN===r.items.length;
+    const completo = tudoComprado && !!r.dataPrevista;
+    const ico = completo ? '✅' : (r.status==='pending'?'⏳':r.status==='aprovado'?'🛒':'🚫');
+    const cls = r.status==='pending'?'p':'s';
     const truck=r.emCaminho?' <span title="A caminho do fornecedor">🚚</span>':'';
     const prev=r.dataPrevista?' <span style="font-size:11px" title="Data prevista de entrega">📅 '+fmtDataPrevista(r.dataPrevista)+'</span>':'';
-    const compradosN=r.status==='aprovado'?r.items.filter(it=>it.comprado).length:0;
     const compras=r.status==='aprovado'?' <span style="font-size:11px" title="Itens comprados">🛍️ '+compradosN+'/'+r.items.length+'</span>':'';
     return '<div class="ri" data-key="'+r.fbKey+'"><div class="rico '+cls+'">'+ico+'</div><div class="rm"><div class="rt">'+r.unidade+' · '+r.setor+'</div><div class="rs">'+r.nome+' · '+fmtTs(r.ts)+' · '+r.items.length+' item'+(r.items.length>1?'s':'')+'</div></div><span class="badge '+st.cls+'">'+st.lb+truck+prev+compras+'</span></div>';
   }).join('');
