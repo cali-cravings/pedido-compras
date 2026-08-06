@@ -350,6 +350,7 @@ textarea{resize:none;line-height:1.5}
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <script>
@@ -410,12 +411,20 @@ let allPeds=[];
 // ---- FIREBASE LISTENER ----
 function initFirebase(){
   showLoading(true);
-  PED_REF.orderByChild('ts').on('value', snap=>{
-    allPeds=[];
-    snap.forEach(child=>{ allPeds.unshift({fbKey:child.key,...child.val()}); });
+  firebase.auth().signInAnonymously().catch(e=>{
+    console.error('Auth error:',e);
     showLoading(false);
-    renderHome();
-  }, err=>{ showLoading(false); toast('Erro de conexão ⚠️'); });
+    toast('Erro de autenticação ⚠️');
+  });
+  firebase.auth().onAuthStateChanged(user=>{
+    if(!user) return;
+    PED_REF.orderByChild('ts').on('value', snap=>{
+      allPeds=[];
+      snap.forEach(child=>{ allPeds.unshift({fbKey:child.key,...child.val()}); });
+      showLoading(false);
+      renderHome();
+    }, err=>{ showLoading(false); toast('Erro de conexão ⚠️'); });
+  });
 }
 function showLoading(show){
   const el=document.getElementById('loading-bar');
