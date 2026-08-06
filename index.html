@@ -411,20 +411,20 @@ let allPeds=[];
 // ---- FIREBASE LISTENER ----
 function initFirebase(){
   showLoading(true);
-  firebase.auth().signInAnonymously().catch(e=>{
-    console.error('Auth error:',e);
-    showLoading(false);
-    toast('Erro de autenticação ⚠️');
-  });
-  firebase.auth().onAuthStateChanged(user=>{
-    if(!user) return;
-    PED_REF.orderByChild('ts').on('value', snap=>{
-      allPeds=[];
-      snap.forEach(child=>{ allPeds.unshift({fbKey:child.key,...child.val()}); });
+  firebase.auth().signInAnonymously()
+    .then(()=>{
+      PED_REF.orderByChild('ts').on('value', snap=>{
+        allPeds=[];
+        snap.forEach(child=>{ allPeds.unshift({fbKey:child.key,...child.val()}); });
+        showLoading(false);
+        renderHome();
+      }, err=>{ showLoading(false); toast('Erro de conexão ⚠️'); });
+    })
+    .catch(e=>{
+      console.error('Auth error:',e);
       showLoading(false);
-      renderHome();
-    }, err=>{ showLoading(false); toast('Erro de conexão ⚠️'); });
-  });
+      toast('Erro de autenticação ⚠️');
+    });
 }
 function showLoading(show){
   const el=document.getElementById('loading-bar');
