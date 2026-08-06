@@ -411,19 +411,26 @@ let allPeds=[];
 // ---- FIREBASE LISTENER ----
 function initFirebase(){
   showLoading(true);
+  console.log('Iniciando auth...');
   firebase.auth().signInAnonymously()
-    .then(()=>{
+    .then((cred)=>{
+      console.log('Auth OK, uid:', cred.user.uid);
       PED_REF.orderByChild('ts').on('value', snap=>{
+        console.log('DB OK, pedidos:', snap.numChildren());
         allPeds=[];
         snap.forEach(child=>{ allPeds.unshift({fbKey:child.key,...child.val()}); });
         showLoading(false);
         renderHome();
-      }, err=>{ showLoading(false); toast('Erro de conexão ⚠️'); });
+      }, err=>{ 
+        console.error('DB error:', err);
+        showLoading(false); 
+        toast('Erro de conexão ⚠️ — '+err.code); 
+      });
     })
     .catch(e=>{
       console.error('Auth error:',e);
       showLoading(false);
-      toast('Erro de autenticação ⚠️');
+      toast('Erro de auth: '+e.code);
     });
 }
 function showLoading(show){
