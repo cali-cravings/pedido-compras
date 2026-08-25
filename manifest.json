@@ -1,7 +1,7 @@
 {
-  "name": "Compras Cali",
-  "short_name": "Compras Cali",
-  "description": "App de pedido de compras do Cali Cravings Gastro Bar",
+  "name": "Masha Group — Compras",
+  "short_name": "Compras MSH",
+  "description": "App de pedido de compras — Masha Group",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#2C3E35",
